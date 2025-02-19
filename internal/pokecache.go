@@ -1,4 +1,4 @@
-package pokecache
+package internal
 
 import (
 	"sync"
