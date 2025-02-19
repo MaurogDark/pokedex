@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/MaurogDark/pokedex/internal"
 )
 
 type Config struct {
@@ -21,6 +24,8 @@ type CliCommand struct {
 	description string
 	callback    func(*Config) error
 }
+
+var cache *internal.Cache
 
 func commands() map[string]CliCommand {
 	return map[string]CliCommand{
@@ -118,28 +123,34 @@ type resultPage struct {
 }
 
 func get_map(map_url string) (resultPage, Config) {
-	res, err := http.Get(map_url)
-	if err != nil {
-		log.Fatal(err)
-	}
-	body, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
-	}
-	if err != nil {
-		log.Fatal(err)
+	body, ok := cache.Get(map_url)
+	if !ok {
+		res, err := http.Get(map_url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		body, err = io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode > 299 {
+			log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		cache.Add(map_url, body)
 	}
 	page := resultPage{}
-	err = json.Unmarshal(body, &page)
+	err := json.Unmarshal(body, &page)
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("MAPPED [" + map_url + "]\nPREV [" + page.Previous + "]\nNEXT [" + page.Next + "]")
 	return page, Config{prev: page.Previous, next: page.Next}
 }
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	cache = internal.NewCache(time.Second * 30)
 	c := Config{prev: "", next: ""}
 	for {
 		fmt.Print("Pokedex > ")
