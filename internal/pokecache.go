@@ -32,6 +32,11 @@ func (c *Cache) Get(key string) ([]byte, bool) {
 	entry, ok := c.data[key]
 	val := entry.val
 	c.mutex.Unlock()
+	/*if ok {
+		fmt.Printf("GOT [%s] FROM CACHE\n", key)
+	} else {
+		fmt.Printf("NO [%s] IN CACHE\n", key)
+	}*/
 	return val, ok
 }
 
