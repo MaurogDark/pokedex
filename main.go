@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"strings"
@@ -26,6 +27,7 @@ type CliCommand struct {
 }
 
 var cache *internal.Cache
+var pokedex map[string]Pokemon
 
 func commands() map[string]CliCommand {
 	return map[string]CliCommand{
@@ -51,8 +53,13 @@ func commands() map[string]CliCommand {
 		},
 		"explore": {
 			name:        "explore",
-			description: "Explore a location. Needs a location parameter",
+			description: "Explore a location. Takes a location parameter",
 			callback:    commandExplore,
+		},
+		"catch": {
+			name:        "catch",
+			description: "Catch a Pokemon. Takes a Pokemon name parameter",
+			callback:    commandCatch,
 		},
 	}
 }
@@ -126,29 +133,103 @@ func commandExplore(_ *Config, param string) error {
 	return nil
 }
 
-type result struct {
+func commandCatch(_ *Config, param string) error {
+	if len(param) < 1 {
+		fmt.Println("The syntax is catch [pokemon]")
+	} else {
+		catch_pokemans(param)
+	}
+	return nil
+}
+
+type Result struct {
 	Name string
 	Url  string
 }
 
-type resultPage struct {
+type ResultPage struct {
 	Count    int
 	Next     string
 	Previous string
-	Results  []result
+	Results  []Result
 }
 
-type pokemon struct {
+type Pokemon_In_Area struct {
 	Name string
 	Url  string
 }
 
-type pokemon_encounter struct {
-	Pokemon pokemon
+type Pokemon_Encounter struct {
+	Pokemon Pokemon_In_Area
 }
 
-type pokemon_area struct {
-	Pokemon_Encounters []pokemon_encounter
+type Pokemon_Area struct {
+	Pokemon_Encounters []Pokemon_Encounter
+}
+
+type Pokemon struct {
+	Id              int
+	Name            string
+	Base_Experience int
+	Height          int
+	Is_Default      bool
+	Order           int
+	Weight          int
+}
+
+func catch_pokemans(pokemon_name string) {
+	pokemon_url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", pokemon_name)
+
+	p, ok := pokedex[pokemon_name]
+	if ok {
+		fmt.Printf("You already have a %s!\n", pokemon_name)
+		return
+	}
+
+	body, ok := cache.Get(pokemon_url)
+	if !ok {
+		res, err := http.Get(pokemon_url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		body, err = io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode > 299 {
+			fmt.Printf("No such Pokemon (code %d)\n", res.StatusCode)
+			return
+		}
+		if err != nil {
+			fmt.Printf("No such Pokemon (error: %s)\n", err)
+			return
+		}
+	}
+
+	p = Pokemon{}
+
+	err := json.Unmarshal(body, &p)
+	if err != nil {
+		fmt.Printf("Failed to parse Pokemon (error: %s)\n", err)
+		return
+	}
+
+	cache.Add(pokemon_url, body)
+
+	chance := 100 - p.Base_Experience/3
+	if chance < 5 {
+		chance = 5
+	}
+
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemon_name)
+	roll := rand.IntN(100)
+
+	fmt.Printf("<<< Need to roll under %d to catch %s, rolled %d >>>\n", chance, pokemon_name, roll)
+
+	if roll < chance {
+		fmt.Printf("%s was caught!\n", pokemon_name)
+		pokedex[pokemon_name] = p
+	} else {
+		fmt.Printf("%s escaped!\n", pokemon_name)
+	}
 }
 
 func get_pokemans(area_url string) {
@@ -170,11 +251,11 @@ func get_pokemans(area_url string) {
 		}
 	}
 
-	area := pokemon_area{}
+	area := Pokemon_Area{}
 
 	err := json.Unmarshal(body, &area)
 	if err != nil {
-		fmt.Printf("Failed to explore the area (error: %s)\n", err)
+		fmt.Printf("Failed to parse area (error: %s)\n", err)
 		return
 	}
 
@@ -190,7 +271,7 @@ func get_pokemans(area_url string) {
 	}
 }
 
-func get_map(map_url string) (resultPage, Config) {
+func get_map(map_url string) (ResultPage, Config) {
 	body, ok := cache.Get(map_url)
 	if !ok {
 		res, err := http.Get(map_url)
@@ -207,7 +288,7 @@ func get_map(map_url string) (resultPage, Config) {
 		}
 		cache.Add(map_url, body)
 	}
-	page := resultPage{}
+	page := ResultPage{}
 	err := json.Unmarshal(body, &page)
 	if err != nil {
 		fmt.Println(err)
@@ -219,6 +300,7 @@ func get_map(map_url string) (resultPage, Config) {
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	cache = internal.NewCache(time.Second * 30)
+	pokedex = map[string]Pokemon{}
 	c := Config{prev: "", next: ""}
 	for {
 		fmt.Print("Pokedex > ")
