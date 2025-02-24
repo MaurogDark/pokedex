@@ -61,6 +61,11 @@ func commands() map[string]CliCommand {
 			description: "Catch a Pokemon. Takes a Pokemon name parameter",
 			callback:    commandCatch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "Inspect a Pokemon. Takes a Pokemon name parameter",
+			callback:    commandInspect,
+		},
 	}
 }
 
@@ -142,6 +147,15 @@ func commandCatch(_ *Config, param string) error {
 	return nil
 }
 
+func commandInspect(_ *Config, param string) error {
+	if len(param) < 1 {
+		fmt.Println("The syntax is inspect [pokemon]")
+	} else {
+		inspect_pokemans(param)
+	}
+	return nil
+}
+
 type Result struct {
 	Name string
 	Url  string
@@ -167,6 +181,23 @@ type Pokemon_Area struct {
 	Pokemon_Encounters []Pokemon_Encounter
 }
 
+type Pokemon_Inner_Stat struct {
+	Name string
+}
+
+type Pokemon_Stat struct {
+	Base_Stat int
+	Stat      Pokemon_Inner_Stat
+}
+
+type Pokemon_Inner_Type struct {
+	Name string
+}
+
+type Pokemon_Type struct {
+	Type Pokemon_Inner_Type
+}
+
 type Pokemon struct {
 	Id              int
 	Name            string
@@ -175,6 +206,33 @@ type Pokemon struct {
 	Is_Default      bool
 	Order           int
 	Weight          int
+	Stats           []Pokemon_Stat
+	Types           []Pokemon_Type
+}
+
+func inspect_pokemans(pokemon_name string) {
+	p, ok := pokedex[pokemon_name]
+	if !ok {
+		fmt.Printf("You don't have a %s!\n", pokemon_name)
+		return
+	}
+
+	fmt.Printf("Name: %s\n", p.Name)
+	fmt.Printf("Height: %d\n", p.Height)
+	fmt.Printf("Weight: %d\n", p.Weight)
+	fmt.Println("Stats:")
+	for s := range p.Stats {
+		fmt.Printf("  -%s: %d\n", p.Stats[s].Stat.Name, p.Stats[s].Base_Stat)
+	}
+	fmt.Println("Types:")
+	if len(p.Types) < 1 {
+		fmt.Println(" - none")
+	} else {
+		for t := range p.Types {
+			fmt.Printf("  -%s\n", p.Types[t].Type.Name)
+		}
+	}
+	fmt.Println("")
 }
 
 func catch_pokemans(pokemon_name string) {
@@ -192,6 +250,7 @@ func catch_pokemans(pokemon_name string) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		body, err = io.ReadAll(res.Body)
 		res.Body.Close()
 		if res.StatusCode > 299 {
@@ -218,6 +277,10 @@ func catch_pokemans(pokemon_name string) {
 	if chance < 5 {
 		chance = 5
 	}
+
+	/*fmt.Print("<<< ")
+	fmt.Print(p)
+	fmt.Print(" >>>\n\n")*/
 
 	fmt.Printf("Throwing a Pokeball at %s...\n", pokemon_name)
 	roll := rand.IntN(100)
@@ -306,6 +369,11 @@ func main() {
 		fmt.Print("Pokedex > ")
 		scanner.Scan()
 		words := cleanInput(scanner.Text())
+		if len(words) < 1 {
+			fmt.Println("Enter help to see a list of commands")
+			continue
+		}
+
 		command, ok := commands()[words[0]]
 		if !ok {
 			fmt.Println("Unrecognized command: " + words[0])
