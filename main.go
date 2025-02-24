@@ -66,6 +66,11 @@ func commands() map[string]CliCommand {
 			description: "Inspect a Pokemon. Takes a Pokemon name parameter",
 			callback:    commandInspect,
 		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Show all the Pokemon you caught",
+			callback:    commandPokedex,
+		},
 	}
 }
 
@@ -152,6 +157,18 @@ func commandInspect(_ *Config, param string) error {
 		fmt.Println("The syntax is inspect [pokemon]")
 	} else {
 		inspect_pokemans(param)
+	}
+	return nil
+}
+
+func commandPokedex(_ *Config, _ string) error {
+	if len(pokedex) < 1 {
+		fmt.Println("Your Pokedex is empty!")
+	} else {
+		fmt.Println("Your Pokedex:")
+		for k := range pokedex {
+			fmt.Printf("  - %s\n", k)
+		}
 	}
 	return nil
 }
